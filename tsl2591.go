@@ -123,7 +123,7 @@ type TSL2591 struct {
 func NewTSL2591(opts *Opts) (*TSL2591, error) {
 	device, err := i2c.Open(&i2c.Devfs{Dev: "/dev/i2c-1"}, int(TSL2591_ADDR))
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	tsl := &TSL2591{
@@ -134,7 +134,7 @@ func NewTSL2591(opts *Opts) (*TSL2591, error) {
 	buf := make([]byte, 1)
 	err = tsl.dev.ReadReg(TSL2591_COMMAND_BIT|TSL2591_REGISTER_DEVICE_ID, buf)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	if buf[0] != 0x50 {
 		return nil, errors.New("Can't find a TSL2591 on I2C bus /dev/i2c-1")
