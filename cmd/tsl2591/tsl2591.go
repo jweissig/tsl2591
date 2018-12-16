@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -27,6 +28,7 @@ func main() {
 	for {
 		channel0, channel1 := tsl.GetFullLuminosity()
 		log.Printf("0x%04x 0x%04x\n", channel0, channel1)
+		fmt.Println(tsl.CalculateLux(channel0, channel1))
 		<-ticker.C
 	}
 }

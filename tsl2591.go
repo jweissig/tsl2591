@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"golang.org/x/exp/io/i2c"
@@ -230,4 +231,59 @@ func (tsl *TSL2591) GetFullLuminosity() (uint16, uint16) {
 	tsl.Disable()
 
 	return channel0, channel1
+}
+
+func (tsl *TSL2591) CalculateLux(ch0, ch1 uint16) float64 {
+	var (
+		atime float64
+		again float64
+
+		cpl float64
+		// lux1 float64
+		// lux2 float64
+		lux float64
+
+		// chan0 uint32
+		// chan1 uint32
+	)
+
+	// Return +Inf for overflow
+	if ch0 == 0xFFFF || ch1 == 0xFFFF {
+		return math.Inf(1)
+	}
+
+	switch tsl.timing {
+	case TSL2591_INTEGRATIONTIME_100MS:
+		atime = 100.0
+	case TSL2591_INTEGRATIONTIME_200MS:
+		atime = 200.0
+	case TSL2591_INTEGRATIONTIME_300MS:
+		atime = 300.0
+	case TSL2591_INTEGRATIONTIME_400MS:
+		atime = 400.0
+	case TSL2591_INTEGRATIONTIME_500MS:
+		atime = 500.0
+	case TSL2591_INTEGRATIONTIME_600MS:
+		atime = 600.0
+	default:
+		atime = 100.0
+	}
+
+	switch tsl.gain {
+	case TSL2591_GAIN_LOW:
+		again = 1.0
+	case TSL2591_GAIN_MED:
+		again = 25.0
+	case TSL2591_GAIN_HIGH:
+		again = 428.0
+	case TSL2591_GAIN_MAX:
+		again = 9876.0
+	default:
+		again = 1.0
+	}
+
+	cpl = (atime * again) / TSL2591_LUX_DF
+	lux = (float64(ch0) - float64(ch1)) * (1.0 - (float64(ch1) / float64(ch0))) / cpl
+
+	return lux
 }
