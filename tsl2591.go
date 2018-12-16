@@ -8,6 +8,7 @@ package tsl2591
 
 import (
 	"errors"
+	"log"
 	"time"
 
 	"periph.io/x/periph/conn/i2c"
@@ -16,32 +17,32 @@ import (
 
 // General purpose consts
 const (
-	TSL2591_VISIBLE      byte = (2) ///< (channel 0) - (channel 1)
-	TSL2591_INFRARED     byte = (1) ///< channel 1
-	TSL2591_FULLSPECTRUM byte = (0) ///< channel 0
+	TSL2591_VISIBLE      byte = 2 ///< channel 0 - channel 1
+	TSL2591_INFRARED     byte = 1 ///< channel 1
+	TSL2591_FULLSPECTRUM byte = 0 ///< channel 0
 
-	TSL2591_ADDR uint16 = (0x29) ///< Default I2C address
+	TSL2591_ADDR uint16 = 0x29 ///< Default I2C address
 
-	TSL2591_COMMAND_BIT byte = (0xA0) ///< 1010 0000: bits 7 and 5 for 'command normal'
+	TSL2591_COMMAND_BIT byte = 0xA0 ///< 1010 0000: bits 7 and 5 for 'command normal'
 
 	///! Special Function Command for "Clear ALS and no persist ALS interrupt"
-	TSL2591_CLEAR_INT byte = (0xE7)
+	TSL2591_CLEAR_INT byte = 0xE7
 	///! Special Function Command for "Interrupt set - forces an interrupt"
-	TSL2591_TEST_INT byte = (0xE4)
+	TSL2591_TEST_INT byte = 0xE4
 
-	TSL2591_WORD_BIT  byte = (0x20) ///< 1 = read/write word (rather than byte)
-	TSL2591_BLOCK_BIT byte = (0x10) ///< 1 = using block read/write
+	TSL2591_WORD_BIT  byte = 0x20 ///< 1 = read/write word rather than byte
+	TSL2591_BLOCK_BIT byte = 0x10 ///< 1 = using block read/write
 
-	TSL2591_ENABLE_POWEROFF byte = (0x00) ///< Flag for ENABLE register to disable
-	TSL2591_ENABLE_POWERON  byte = (0x01) ///< Flag for ENABLE register to enable
-	TSL2591_ENABLE_AEN      byte = (0x02) ///< ALS Enable. This field activates ALS function. Writing a one activates the ALS. Writing a zero disables the ALS.
-	TSL2591_ENABLE_AIEN     byte = (0x10) ///< ALS Interrupt Enable. When asserted permits ALS interrupts to be generated, subject to the persist filter.
-	TSL2591_ENABLE_NPIEN    byte = (0x80) ///< No Persist Interrupt Enable. When asserted NP Threshold conditions will generate an interrupt, bypassing the persist filter
+	TSL2591_ENABLE_POWEROFF byte = 0x00 ///< Flag for ENABLE register to disable
+	TSL2591_ENABLE_POWERON  byte = 0x01 ///< Flag for ENABLE register to enable
+	TSL2591_ENABLE_AEN      byte = 0x02 ///< ALS Enable. This field activates ALS function. Writing a one activates the ALS. Writing a zero disables the ALS.
+	TSL2591_ENABLE_AIEN     byte = 0x10 ///< ALS Interrupt Enable. When asserted permits ALS interrupts to be generated, subject to the persist filter.
+	TSL2591_ENABLE_NPIEN    byte = 0x80 ///< No Persist Interrupt Enable. When asserted NP Threshold conditions will generate an interrupt, bypassing the persist filter
 
-	TSL2591_LUX_DF    float64 = (408.0) ///< Lux cooefficient
-	TSL2591_LUX_COEFB float64 = (1.64)  ///< CH0 coefficient
-	TSL2591_LUX_COEFC float64 = (0.59)  ///< CH1 coefficient A
-	TSL2591_LUX_COEFD float64 = (0.86)  ///< CH2 coefficient B
+	TSL2591_LUX_DF    float64 = 408.0 ///< Lux cooefficient
+	TSL2591_LUX_COEFB float64 = 1.64  ///< CH0 coefficient
+	TSL2591_LUX_COEFC float64 = 0.59  ///< CH1 coefficient A
+	TSL2591_LUX_COEFD float64 = 0.86  ///< CH2 coefficient B
 )
 
 // TSL2591 Register map
@@ -121,7 +122,6 @@ type TSL2591 struct {
 // TSL2591 was not found.
 func NewTSL2591(opts *Opts) (*TSL2591, error) {
 	bus, err := i2creg.Open("")
-	// bus, err := i2creg.Open("/dev/i2c-1")
 	if err != nil {
 		panic(err)
 	}
@@ -211,20 +211,14 @@ func (tsl *TSL2591) GetFullLuminosity() uint32 {
 		time.Sleep(120 * time.Millisecond)
 	}
 
-	var (
-		x uint32
-		y uint16
-	)
-	y, err := tsl.read16(TSL2591_COMMAND_BIT | TSL2591_WORD_BIT | TSL2591_REGISTER_CHAN0_LOW)
-	if err != nil {
-		panic(err)
+	var x uint32
+	for addr := TSL2591_REGISTER_CHAN0_LOW; addr <= TSL2591_REGISTER_CHAN1_HIGH; addr++ {
+		b, err := tsl.read8(TSL2591_COMMAND_BIT | addr)
+		if err != nil {
+			panic(err)
+		}
+		x = x<<8 | uint32(b)
 	}
-	_x, err := tsl.read16(TSL2591_COMMAND_BIT | TSL2591_WORD_BIT | TSL2591_REGISTER_CHAN1_LOW)
-	if err != nil {
-		panic(err)
-	}
-	x = uint32(_x) << 16
-	x |= uint32(y)
 
 	tsl.Disable()
 
@@ -250,5 +244,6 @@ func (tsl *TSL2591) read8(cmd byte) (byte, error) {
 	if err := tsl.dev.Tx([]byte{cmd}, read[:]); err != nil {
 		return 0, err
 	}
+	log.Println("Received", read)
 	return read[0], nil
 }
