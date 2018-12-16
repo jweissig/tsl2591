@@ -7,6 +7,7 @@
 package tsl2591
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"time"
@@ -142,7 +143,6 @@ func NewTSL2591(opts *Opts) (*TSL2591, error) {
 	tsl.SetTiming(opts.Timing)
 	tsl.SetGain(opts.Gain)
 
-	// TSL2591 boots up disabld
 	tsl.Disable()
 
 	return tsl, nil
@@ -201,7 +201,7 @@ func CalculateLux(ch0, ch1 uint16) float64 {
 	return 0.0
 }
 
-func (tsl *TSL2591) GetFullLuminosity() uint32 {
+func (tsl *TSL2591) GetFullLuminosity() (uint16, uint16) {
 	tsl.Enable()
 
 	// Delay for ADC to complete
@@ -209,7 +209,6 @@ func (tsl *TSL2591) GetFullLuminosity() uint32 {
 		time.Sleep(120 * time.Millisecond)
 	}
 
-	var x uint32
 	bytes := make([]byte, 4)
 
 	err := tsl.dev.ReadReg(TSL2591_COMMAND_BIT|TSL2591_REGISTER_CHAN0_LOW, bytes)
@@ -217,15 +216,18 @@ func (tsl *TSL2591) GetFullLuminosity() uint32 {
 		panic(err)
 	}
 
-	ch0Lo, ch0Hi, ch1Lo, ch1Hi := bytes[0], bytes[1], bytes[2], bytes[3]
-	fmt.Printf("%02x %02x %02x %02x", ch0Lo, ch0Hi, ch1Lo, ch1Hi)
+	// ch0Lo, ch0Hi, ch1Lo, ch1Hi := bytes[0], bytes[1], bytes[2], bytes[3]
+	// fmt.Printf("%02x %02x %02x %02x", ch0Lo, ch0Hi, ch1Lo, ch1Hi)
 
-	var channel0 int = int(ch0Hi)<<8 | int(ch0Lo)
-	var channel1 int = int(ch1Hi)<<8 | int(ch1Lo)
+	// var channel0 int = int(ch0Hi)<<8 | int(ch0Lo)
+	// var channel1 int = int(ch1Hi)<<8 | int(ch1Lo)
 
+	fmt.Printf("%v", bytes)
+	channel0 := binary.LittleEndian.Uint16(bytes[0:])
+	channel1 := binary.LittleEndian.Uint16(bytes[2:])
 	fmt.Printf(" -> %04x %04x\n", channel0, channel1)
 
 	tsl.Disable()
 
-	return x
+	return channel0, channel1
 }
