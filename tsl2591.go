@@ -8,11 +8,10 @@ package tsl2591
 
 import (
 	"errors"
-	"log"
+	"fmt"
 	"time"
 
-	"periph.io/x/periph/conn/i2c"
-	"periph.io/x/periph/conn/i2c/i2creg"
+	"golang.org/x/exp/io/i2c"
 )
 
 // General purpose consts
@@ -114,26 +113,29 @@ type TSL2591 struct {
 	enabled bool
 	timing  byte
 	gain    byte
-	dev     *i2c.Dev
+	dev     *i2c.Device
 }
 
 // Begin sets up a TSL2591 chip via the I2C protocol, sets its gain and timing
 // attributes, and returns an error if any occurred in that process or if the
 // TSL2591 was not found.
 func NewTSL2591(opts *Opts) (*TSL2591, error) {
-	bus, err := i2creg.Open("")
+	device, err := i2c.Open(&i2c.Devfs{Dev: "/dev/i2c-1"}, int(TSL2591_ADDR))
 	if err != nil {
 		panic(err)
 	}
 
-	tsl := &TSL2591{dev: &i2c.Dev{Bus: bus, Addr: TSL2591_ADDR}}
+	tsl := &TSL2591{
+		dev: device,
+	}
 
 	// Read the device ID from the TSL2591. It should be 0x50
-	id, err := tsl.read8(TSL2591_COMMAND_BIT | TSL2591_REGISTER_DEVICE_ID)
+	buf := make([]byte, 1)
+	err = tsl.dev.ReadReg(TSL2591_COMMAND_BIT|TSL2591_REGISTER_DEVICE_ID, buf)
 	if err != nil {
 		panic(err)
 	}
-	if id != 0x50 {
+	if buf[0] != 0x50 {
 		return nil, errors.New("Can't find a TSL2591 on I2C bus /dev/i2c-1")
 	}
 
@@ -148,10 +150,9 @@ func NewTSL2591(opts *Opts) (*TSL2591, error) {
 
 func (tsl *TSL2591) Enable() {
 	var write []byte = []byte{
-		TSL2591_COMMAND_BIT | TSL2591_REGISTER_ENABLE,
 		TSL2591_ENABLE_POWERON | TSL2591_ENABLE_AEN | TSL2591_ENABLE_AIEN | TSL2591_ENABLE_NPIEN,
 	}
-	if err := tsl.dev.Tx(write, nil); err != nil {
+	if err := tsl.dev.WriteReg(TSL2591_COMMAND_BIT|TSL2591_REGISTER_ENABLE, write); err != nil {
 		panic(err)
 	}
 	tsl.enabled = true
@@ -159,10 +160,9 @@ func (tsl *TSL2591) Enable() {
 
 func (tsl *TSL2591) Disable() {
 	var write []byte = []byte{
-		TSL2591_COMMAND_BIT | TSL2591_REGISTER_ENABLE,
 		TSL2591_ENABLE_POWEROFF,
 	}
-	if err := tsl.dev.Tx(write, nil); err != nil {
+	if err := tsl.dev.WriteReg(TSL2591_COMMAND_BIT|TSL2591_REGISTER_ENABLE, write); err != nil {
 		panic(err)
 	}
 	tsl.enabled = false
@@ -172,10 +172,9 @@ func (tsl *TSL2591) SetGain(gain byte) {
 	tsl.Enable()
 
 	write := []byte{
-		TSL2591_COMMAND_BIT | TSL2591_REGISTER_CONTROL,
 		tsl.timing | gain,
 	}
-	if err := tsl.dev.Tx(write, nil); err != nil {
+	if err := tsl.dev.WriteReg(TSL2591_COMMAND_BIT|TSL2591_REGISTER_CONTROL, write); err != nil {
 		panic(err)
 	}
 
@@ -187,10 +186,9 @@ func (tsl *TSL2591) SetTiming(timing byte) {
 	tsl.Enable()
 
 	write := []byte{
-		TSL2591_COMMAND_BIT | TSL2591_REGISTER_CONTROL,
 		timing | tsl.gain,
 	}
-	if err := tsl.dev.Tx(write, nil); err != nil {
+	if err := tsl.dev.WriteReg(TSL2591_COMMAND_BIT|TSL2591_REGISTER_CONTROL, write); err != nil {
 		panic(err)
 	}
 
@@ -212,38 +210,22 @@ func (tsl *TSL2591) GetFullLuminosity() uint32 {
 	}
 
 	var x uint32
-	for addr := TSL2591_REGISTER_CHAN0_LOW; addr <= TSL2591_REGISTER_CHAN1_HIGH; addr++ {
-		b, err := tsl.read8(TSL2591_COMMAND_BIT | addr)
-		if err != nil {
-			panic(err)
-		}
-		x = x<<8 | uint32(b)
+	bytes := make([]byte, 4)
+
+	err := tsl.dev.ReadReg(TSL2591_COMMAND_BIT|TSL2591_REGISTER_CHAN0_LOW, bytes)
+	if err != nil {
+		panic(err)
 	}
+
+	ch0Lo, ch0Hi, ch1Lo, ch1Hi := bytes[0], bytes[1], bytes[2], bytes[3]
+	fmt.Printf("%02x %02x %02x %02x", ch0Lo, ch0Hi, ch1Lo, ch1Hi)
+
+	var channel0 int = int(ch0Hi)<<8 | int(ch0Lo)
+	var channel1 int = int(ch1Hi)<<8 | int(ch1Lo)
+
+	fmt.Printf(" -> %04x %04x\n", channel0, channel1)
 
 	tsl.Disable()
 
 	return x
-}
-
-// Low-level private methods
-
-// TODO If there are weird readings coming out, it could be because of the
-// return value here.
-func (tsl *TSL2591) read16(cmd byte) (uint16, error) {
-	// read := make([]byte, 2)
-	var read [2]byte
-	if err := tsl.dev.Tx([]byte{cmd}, read[:]); err != nil {
-		return 0, err
-	}
-	return uint16(read[0]<<8) | uint16(read[1]), nil
-}
-
-func (tsl *TSL2591) read8(cmd byte) (byte, error) {
-	// read := make([]byte, 1)
-	var read [1]byte
-	if err := tsl.dev.Tx([]byte{cmd}, read[:]); err != nil {
-		return 0, err
-	}
-	log.Println("Received", read)
-	return read[0], nil
 }

@@ -9,18 +9,12 @@ import (
 	"time"
 
 	"github.com/mstahl/tsl2591"
-	"periph.io/x/periph/host"
 )
 
 func main() {
-	// Initialize I2C host
-	if _, err := host.Init(); err != nil {
-		panic(err)
-	}
-
 	tsl, err := tsl2591.NewTSL2591(&tsl2591.Opts{
-		Gain:   tsl2591.TSL2591_GAIN_MED,
-		Timing: tsl2591.TSL2591_INTEGRATIONTIME_300MS,
+		Gain:   tsl2591.TSL2591_GAIN_HIGH,
+		Timing: tsl2591.TSL2591_INTEGRATIONTIME_600MS,
 	})
 	if err != nil {
 		panic(err)
