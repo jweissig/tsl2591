@@ -20,7 +20,7 @@ or alerts yet.
 		panic(err)
 	}
 
-	ticker := time.NewTicker(Interval)
+	ticker := time.NewTicker(1 * time.Second)
 
 	for {
 		channel0, channel1 := tsl.GetFullLuminosity()
